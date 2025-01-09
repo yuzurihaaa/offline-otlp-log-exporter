@@ -1,0 +1,3 @@
+[submodule "lib/src/opentelementry/opentelementry-proto"]
+    path = lib/src/opentelementry/opentelementry-proto
+    url = git@github.com:open-telemetry/opentelemetry-proto.git
