@@ -101,7 +101,7 @@ class FileWriterImpl implements FileWriter {
     }
   }
 
-  File _getLatestLogFile() => File(join(dir.path,
+  File _getLatestLogFile() => File(join(dir.path, 'logs',
       '${DateFormat('yyyy-MM-dd').format(DateTime.now())}$logExtension'));
 
   Future<bool> _ensureFileIsAvailable(File file) async {

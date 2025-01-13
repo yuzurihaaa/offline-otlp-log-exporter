@@ -4,7 +4,7 @@ version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 
 environment:
-  sdk: ^3.4.3
+  sdk: '>=2.19.0 <4.0.0'
 
 # Add regular dependencies here.
 dependencies:
@@ -12,6 +12,9 @@ dependencies:
   queue: ^3.1.0+2
   intl: ^0.17.0
   collection: ^1.16.0
+  fixnum: '>=1.0.0 <2.0.0'
+  protobuf: '>=2.0.0 <4.0.0'
+  http: '>=0.13.0 <2.0.0'
   opentelemetry:
     git:
       url: git@github.com:yuzurihaaa/opentelemetry-dart.git
