@@ -226,8 +226,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "feat/logs"
-      resolved-ref: "6e82fca73658e7a35fbcca19fd4c511dbdf73a99"
+      ref: bb3d2bf236997efd7620bbca3d48cba771ecc3d7
+      resolved-ref: bb3d2bf236997efd7620bbca3d48cba771ecc3d7
       url: "git@github.com:yuzurihaaa/opentelemetry-dart.git"
     source: git
     version: "0.18.8"

@@ -19,7 +19,6 @@ import 'package:offline_otlp_log_exporter/src/proto/opentelemetry/proto/resource
     as pb_resource;
 import 'package:offline_otlp_log_exporter/src/utils.dart';
 import 'package:opentelemetry/sdk.dart' as sdk;
-import 'package:opentelemetry/src/api/common/export_result.dart';
 import 'package:opentelemetry/src/experimental_sdk.dart' as sdk;
 import 'package:path/path.dart';
 
@@ -49,7 +48,7 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
   Timer? _timer;
 
   @override
-  Future<ExportResult> export(List<sdk.ReadableLogRecord> logs) async {
+  Future<sdk.ExportResult> export(List<sdk.ReadableLogRecord> logs) async {
     await Future.delayed(const Duration(seconds: 2));
     await _ensureFileExist();
 
@@ -59,7 +58,7 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
       await _fileWriter.write(protobuf.writeToJsonMap());
     }
     _initTimer();
-    return ExportResult(code: ExportResultCode.success);
+    return sdk.ExportResult(code: sdk.ExportResultCode.success);
   }
 
   @override
