@@ -17,7 +17,6 @@ abstract class FileWriter {
 
 class FileWriterImpl implements FileWriter {
   final Directory dir;
-  final Duration logTtl;
 
   IOSink? _sink;
   Queue? _writeQueue;
@@ -25,9 +24,14 @@ class FileWriterImpl implements FileWriter {
 
   FileWriterImpl({
     required this.dir,
-    required this.logTtl,
     Queue? queue,
   }) : _writeQueue = queue ?? Queue();
+
+  Duration _logTtl = const Duration(days: 30);
+
+  set logTtl(Duration value) {
+    _logTtl = value;
+  }
 
   @override
   Future<void> write(Object input) async {
@@ -55,7 +59,7 @@ class FileWriterImpl implements FileWriter {
 
   @override
   Future<void> deleteOldLogs() async {
-    if (logTtl == Duration.zero) {
+    if (_logTtl == Duration.zero) {
       return;
     }
     await dir
@@ -66,7 +70,7 @@ class FileWriterImpl implements FileWriter {
       if (fileDt == null) {
         return;
       }
-      if (DateTime.now().difference(fileDt) > logTtl) {
+      if (DateTime.now().difference(fileDt) > _logTtl) {
         await file.delete();
       }
     });

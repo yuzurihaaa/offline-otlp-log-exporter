@@ -25,30 +25,63 @@ import 'file_writer.dart';
 
 class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
   final Directory dir;
-  final Duration logTtl;
-  final Duration scheduleDelay;
-  final Duration exportTimeout;
-  final Uri uri;
-  final int maxExportBatchSize;
   final FileWriter _fileWriter;
-  final Map<String, String> headers;
 
   OfflineOTLPLogExporter({
+    required Uri uri,
     required this.dir,
-    required this.uri,
-    this.scheduleDelay = const Duration(seconds: 5),
-    this.exportTimeout = const Duration(seconds: 30),
-    this.maxExportBatchSize = 50,
-    this.logTtl = const Duration(days: 30),
-    this.headers = const <String, String>{},
+    Duration scheduleDelay = const Duration(seconds: 5),
+    Duration exportTimeout = const Duration(seconds: 30),
+    int maxExportBatchSize = 50,
+    Map<String, String> headers = const <String, String>{},
     FileWriter? fileWriter,
-  }) : _fileWriter = fileWriter ?? FileWriterImpl(dir: dir, logTtl: logTtl);
+  })  : _scheduleDelay = scheduleDelay,
+        _exportTimeout = exportTimeout,
+        _maxExportBatchSize = maxExportBatchSize,
+        _headers = headers,
+        _uri = uri,
+        _fileWriter = fileWriter ?? FileWriterImpl(dir: dir);
+
+  void setLogTtl(Duration value) {
+    if (_fileWriter is FileWriterImpl) {
+      (_fileWriter as FileWriterImpl).logTtl = value;
+    }
+  }
+
+  Uri? _uri;
+
+  set uri(Uri value) {
+    _uri = value;
+  }
+
+  Duration _scheduleDelay;
+
+  set scheduleDelay(Duration value) {
+    _scheduleDelay = value;
+  }
+
+  Duration _exportTimeout;
+
+  set exportTimeout(Duration value) {
+    _exportTimeout = value;
+  }
+
+  int _maxExportBatchSize;
+
+  set maxExportBatchSize(int value) {
+    _maxExportBatchSize = value;
+  }
+
+  Map<String, String> _headers;
+
+  set headers(Map<String, String> value) {
+    _headers = value;
+  }
 
   Timer? _timer;
 
   @override
   Future<sdk.ExportResult> export(List<sdk.ReadableLogRecord> logs) async {
-    await Future.delayed(const Duration(seconds: 2));
     await _ensureFileExist();
 
     final Iterable<pb_logs.ResourceLogs> protobufs = _logsToProtobuf(logs);
@@ -69,14 +102,14 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
 
   void _initTimer() {
     if (_timer != null) return;
-    _timer = Timer(scheduleDelay, () {
+    _timer = Timer(_scheduleDelay, () {
       final arg = SyncArg(
         path: join(dir.path, 'logs'),
-        url: uri.toString(),
-        batchSize: maxExportBatchSize,
-        delayInMs: scheduleDelay.inMilliseconds,
-        headers: headers,
-        timeoutInMs: exportTimeout.inMilliseconds,
+        url: _uri.toString(),
+        batchSize: _maxExportBatchSize,
+        delayInMs: _scheduleDelay.inMilliseconds,
+        headers: _headers,
+        timeoutInMs: _exportTimeout.inMilliseconds,
       );
       Isolate.spawn<SyncArg>(_sync, arg)
           .then<Object?>((e) => e)
@@ -145,7 +178,8 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
   pb_logs.LogRecord _logToProtobuf(sdk.ReadableLogRecord log) {
     return pb_logs.LogRecord(
       timeUnixNano: Int64(log.timeStamp.microsecondsSinceEpoch),
-      severityNumber: pg_logs_enum.SeverityNumber.valueOf(log.severityNumber.index),
+      severityNumber:
+          pg_logs_enum.SeverityNumber.valueOf(log.severityNumber.index),
       severityText: log.severityText,
       droppedAttributesCount: log.droppedAttributesCount,
       body: _attributeONEValueToProtobuf(log.body),
