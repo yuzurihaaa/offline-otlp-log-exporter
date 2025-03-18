@@ -7,6 +7,7 @@ import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:logging/logging.dart';
 import 'package:offline_otlp_log_exporter/src/proto/opentelemetry/proto/collector/logs/v1/logs_service.pb.dart'
     as pb_logs_service;
 import 'package:offline_otlp_log_exporter/src/proto/opentelemetry/proto/common/v1/common.pb.dart'
@@ -24,6 +25,7 @@ import 'package:path/path.dart';
 import 'file_writer.dart';
 
 class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
+  final _log = Logger('opentelemetry.OfflineOTLPLogExporter');
   final Directory dir;
   final FileWriter _fileWriter;
 
@@ -78,6 +80,8 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
     _headers = value;
   }
 
+  Isolate? _isolate;
+
   Timer? _timer;
 
   @override
@@ -95,14 +99,14 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
 
   @override
   Future<void> shutdown() async {
-    _timer?.cancel();
-    _timer = null;
+    _close();
     await _fileWriter.close();
   }
 
   void _initTimer() {
     if (_timer != null) return;
-    _timer = Timer(_scheduleDelay, () {
+    _timer = Timer(_scheduleDelay, () async {
+      final receivePort = ReceivePort();
       final arg = SyncArg(
         path: join(dir.path, 'logs'),
         url: _uri.toString(),
@@ -110,19 +114,47 @@ class OfflineOTLPLogExporter implements sdk.LogRecordExporter {
         delayInMs: _scheduleDelay.inMilliseconds,
         headers: _headers,
         timeoutInMs: _exportTimeout.inMilliseconds,
+        sendPort: receivePort.sendPort,
       );
-      Isolate.spawn<SyncArg>(_sync, arg)
-          .then<Object?>((e) => e)
+      if (_isolate != null) {
+        _log.shout("isolate is still running. Killing it immediately");
+        _isolate?.kill(priority: Isolate.immediate);
+        _isolate = null;
+      }
+      _isolate = await Isolate.spawn<SyncArg>(_sync, arg)
+          .then<Isolate?>((e) => e)
           .catchError((e, st) {
-        print("_sync error!!!!");
-        print(e);
-        print(st);
+        _log.shout("failed to spawn isolate", e, st);
         return null;
-      }).then((lastLogAt) async {
-        _timer?.cancel();
-        _timer = null;
-      }).whenComplete(_initTimer);
+      });
+
+      receivePort.listen(handleMessage);
     });
+  }
+
+  void handleMessage(message) {
+    if (message is SendLogsMessage) {
+      if (message.error != null) {
+        _log.shout(
+          message.message,
+          message.error,
+          message.stackTrace,
+        );
+      } else {
+        _log.finest(message.message);
+      }
+    }
+    if (message is SendLogsDone) {
+      _close();
+      _initTimer();
+    }
+  }
+
+  void _close() {
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    _timer?.cancel();
+    _timer = null;
   }
 
   Future<void> _ensureFileExist() async {
@@ -250,6 +282,8 @@ class SyncArg {
   /// Additional data to be added in request header.
   final Map<String, String> headers;
 
+  final SendPort sendPort;
+
   final bool shouldCompress;
 
   SyncArg({
@@ -259,6 +293,7 @@ class SyncArg {
     required this.batchSize,
     required this.timeoutInMs,
     required this.headers,
+    required this.sendPort,
     this.shouldCompress = true,
   });
 }
@@ -273,10 +308,6 @@ Future<void> _sync(SyncArg arg) async {
   final content = await metadataFile.readAsString().then(jsonDecode);
   final lastFile = File(join(arg.path, content['file']));
   final lastLine = content['lastLine'];
-
-  print('processing file');
-  print('file ${lastFile.path}');
-  print('line $lastLine');
 
   // read all logs
   final logs = await lastFile
@@ -311,8 +342,18 @@ Future<void> _sync(SyncArg arg) async {
   for (var batch in batches) {
     final out = <pb_logs.ResourceLogs>[];
     for (final e in batch) {
-      out.add(pb_logs.ResourceLogs()..mergeFromJson(e));
-      await _send(Uri.parse(arg.url), out, arg.headers);
+      try {
+        out.add(pb_logs.ResourceLogs()..mergeFromJson(e));
+        await _send(Uri.parse(arg.url), out, arg.headers);
+        arg.sendPort
+            .send(SendLogsMessage(message: "logs successfully sent to remote"));
+      } catch (e, st) {
+        arg.sendPort.send(SendLogsMessage(
+          message: "failed to send logs to remote",
+          error: e,
+          stackTrace: st,
+        ));
+      }
     }
     try {
       await _ensureMetadataFileExist(
@@ -322,10 +363,16 @@ Future<void> _sync(SyncArg arg) async {
           lastLine: lastLine + batch.length,
         ),
       );
-    } catch (e) {
-      print(e);
+    } catch (e, st) {
+      arg.sendPort.send(SendLogsMessage(
+        message: "_ensureMetadataFileExist error",
+        error: e,
+        stackTrace: st,
+      ));
     }
   }
+
+  arg.sendPort.send(SendLogsDone());
 }
 
 Future<FileSystemEntity> _nextNextLogFile(
@@ -395,3 +442,17 @@ Future<void> _send(
   await http.Client()
       .post(uri, body: body.writeToBuffer(), headers: reqHeaders);
 }
+
+class SendLogsMessage {
+  final String message;
+  final Object? error;
+  final StackTrace? stackTrace;
+
+  SendLogsMessage({
+    required this.message,
+    this.error,
+    this.stackTrace,
+  });
+}
+
+class SendLogsDone {}
