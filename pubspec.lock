@@ -226,11 +226,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: bb3d2bf236997efd7620bbca3d48cba771ecc3d7
-      resolved-ref: bb3d2bf236997efd7620bbca3d48cba771ecc3d7
+      ref: "531696dae68055bd5a1d051d62c665bc0ff1fc6a"
+      resolved-ref: "531696dae68055bd5a1d051d62c665bc0ff1fc6a"
       url: "git@github.com:yuzurihaaa/opentelemetry-dart.git"
     source: git
-    version: "0.18.8"
+    version: "0.18.9"
   package_config:
     dependency: transitive
     description:
