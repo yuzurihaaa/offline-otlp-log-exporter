@@ -19,7 +19,7 @@ dependencies:
   opentelemetry:
     git:
       url: git@github.com:yuzurihaaa/opentelemetry-dart.git
-      ref: 531696dae68055bd5a1d051d62c665bc0ff1fc6a
+      ref: e01c8e90a26b08e9f4eb7afbea19f1c1c78a22a1
 
 dev_dependencies:
   lints: ^3.0.0
